@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="声メモ">
+<meta name="theme-color" content="#0f172a">
+<title>声メモ｜文字起こしレコーダー</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#f1f5f9;--sub:#94a3b8;--red:#ef4444;--grn:#22c55e;--blu:#3b82f6;--org:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 20px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 2px}
+h1{font-size:20px;margin:0}
+.ver{font-size:11px;color:var(--sub)}
+.card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:14px}
+#status{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--sub)}
+#dot{width:12px;height:12px;border-radius:50%;background:#64748b}
+#dot.on{background:var(--red);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+#timer{margin-left:auto;font-variant-numeric:tabular-nums;font-size:22px;color:var(--txt)}
+textarea{width:100%;background:#0b1222;color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:17px;line-height:1.6;font-family:inherit;resize:vertical}
+#text{min-height:200px;margin-top:10px}
+#text[readonly]{border-color:var(--red)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:14px;color:#fff;font-size:18px;font-weight:700;padding:18px 8px;font-family:inherit}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.35}
+#btnRec{background:var(--red)}
+#btnRec.pause{background:var(--org)}
+#btnStop{background:#475569}
+.modes{display:grid;gap:10px}
+.mode{background:#0b1222;border:2px solid var(--line);text-align:left;padding:14px;font-size:17px}
+.mode small{display:block;font-weight:400;font-size:13px;color:var(--sub);margin-top:3px}
+.mode.sel{border-color:var(--blu);background:#172554}
+#out{min-height:180px;margin-top:12px;font-size:15px}
+#btnCopy{width:100%;background:var(--blu);margin-top:10px}
+#btnCopy.done{background:var(--grn)}
+.row{display:flex;gap:10px;margin-top:10px}
+.row button{flex:1;font-size:15px;padding:12px;background:#475569}
+h2{font-size:16px;margin:0 0 10px}
+.hidden{display:none}
+details summary{font-weight:700;font-size:16px;cursor:pointer}
+label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+#hist{list-style:none;padding:0;margin:10px 0 0}
+#hist li{border-top:1px solid var(--line);padding:10px 2px;font-size:14px;display:flex;gap:8px;align-items:center}
+#hist li span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#hist li b{color:var(--sub);font-weight:400;font-size:12px;white-space:nowrap}
+#hist li button{font-size:13px;padding:8px 10px;background:#334155}
+.note{font-size:13px;color:var(--sub);line-height:1.6}
+#warn{background:#7f1d1d;color:#fff;border-radius:12px;padding:12px;font-size:14px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<header><h1>🎙 声メモ</h1><span class="ver">v1.1 ベーシック版</span></header>
+
+<div id="warn" class="hidden"></div>
+
+<div class="card">
+  <div id="status"><span id="dot"></span><span id="stText">待機中</span><span id="timer">00:00</span></div>
+  <textarea id="text" placeholder="録音ボタンを押して話してください。ここに文字が出ます。&#10;終了後は手で直せます。"></textarea>
+  <div class="btns" style="margin-top:12px">
+    <button id="btnRec">● 録音開始</button>
+    <button id="btnStop" disabled>■ 終了</button>
+  </div>
+  <div class="row"><button id="btnClear">🗑 クリア</button></div>
+</div>
+
+<div class="card hidden" id="outCard">
+  <h2>どの形でコピーしますか？</h2>
+  <div class="modes">
+    <button class="mode" data-m="raw">① そのまま<small>文字起こしのテキストだけ</small></button>
+    <button class="mode" data-m="fix">② 校正してもらう<small>頭に「校正して下さい」を付ける</small></button>
+    <button class="mode" data-m="rep">③ 報告書にしてもらう<small>頭に「報告書にして下さい」＋日時を付ける</small></button>
+    <button class="mode" data-m="idn">④ インドネシア語に翻訳<small>頭に「インドネシア語に翻訳して下さい」を付ける</small></button>
+  </div>
+  <textarea id="out" readonly></textarea>
+  <button id="btnCopy">📋 コピーする</button>
+  <button id="btnGT" style="width:100%;margin-top:10px;background:#b91c1c">🇮🇩 Google翻訳でインドネシア語を見る</button>
+  <p class="note">コピーしたら、ClaudeやChatGPTなど使うAIにそのまま貼り付けてください。</p>
+</div>
+
+<div class="card">
+  <details>
+    <summary>📂 履歴（最新20件）</summary>
+    <ul id="hist"></ul>
+  </details>
+</div>
+
+<div class="card">
+  <details>
+    <summary>⚙️ 頭に付ける文章の設定</summary>
+    <label>② 校正の頭の文章</label>
+    <textarea id="hFix" rows="3"></textarea>
+    <label>③ 報告書の頭の文章</label>
+    <textarea id="hRep" rows="3"></textarea>
+    <label>④ インドネシア語翻訳の頭の文章</label>
+    <textarea id="hIdn" rows="3"></textarea>
+    <div class="row"><button id="btnReset">初期値に戻す</button></div>
+    <p class="note">変更は自動で保存されます。</p>
+  </details>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const DEF_FIX='以下のテキストを校正して下さい。誤字脱字や話し言葉を直し、読みやすい文章にして下さい。';
+const DEF_REP='以下のテキストを報告書にして下さい。見出しと箇条書きで、日時・場所・作業内容・結果・課題がわかるようにまとめて下さい。';
+const DEF_IDN='以下の日本語をインドネシア語に翻訳して下さい。技能実習生が読んでわかるやさしいインドネシア語にし、日本語の原文も下に残して下さい。';
+const LS={fix:'koememo_fix',rep:'koememo_rep',idn:'koememo_idn',hist:'koememo_hist'};
+
+/* ---- 設定 ---- */
+$('hFix').value=localStorage.getItem(LS.fix)||DEF_FIX;
+$('hRep').value=localStorage.getItem(LS.rep)||DEF_REP;
+$('hFix').oninput=()=>{localStorage.setItem(LS.fix,$('hFix').value);buildOut()};
+$('hIdn').value=localStorage.getItem(LS.idn)||DEF_IDN;
+$('hIdn').oninput=()=>{localStorage.setItem(LS.idn,$('hIdn').value);buildOut()};
+$('hRep').oninput=()=>{localStorage.setItem(LS.rep,$('hRep').value);buildOut()};
+$('btnReset').onclick=()=>{$('hIdn').value=DEF_IDN;localStorage.setItem(LS.idn,DEF_IDN);$('hFix').value=DEF_FIX;$('hRep').value=DEF_REP;localStorage.setItem(LS.fix,DEF_FIX);localStorage.setItem(LS.rep,DEF_REP);buildOut()};
+
+/* ---- 音声認識 ---- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR){showWarn('このブラウザは音声認識に対応していません。iPhoneはSafari、AndroidはChromeで開いてください。<br>※キーボードのマイク（音声入力）で上の欄に入力することもできます。');$('btnRec').disabled=true}
+
+let rec=null,recording=false,finalText='',interim='',lastFinal='',startAt=0,elapsed=0,tick=null,wake=null,recDate=null;
+
+function addFinal(t){
+  t=t.trim(); if(!t||t===lastFinal) return; // iOSの重複対策
+  lastFinal=t;
+  if(!/[。！？!?、]$/.test(t)) t+='。';
+  finalText+=t;
+}
+function render(){$('text').value=finalText+interim; $('text').scrollTop=$('text').scrollHeight}
+
+function newRec(){
+  const r=new SR(); r.lang='ja-JP'; r.continuous=true; r.interimResults=true;
+  r.onresult=e=>{
+    interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal) addFinal(t); else interim+=t;
+    }
+    render();
+  };
+  r.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      showWarn('マイクが使えません。設定でマイクを許可してください。<br>ホーム画面から開いて動かない場合は、Safariで開いてください。');
+      pause();
+    }
+  };
+  r.onend=()=>{ // 無音で止まっても自動で再開
+    if(interim){addFinal(interim);interim='';render()}
+    if(recording) setTimeout(()=>{ if(recording){ try{r.start()}catch(_){ rec=newRec(); try{rec.start()}catch(__){} } } },250);
+  };
+  return r;
+}
+
+function start(){
+  finalText=$('text').value; // 手直しした内容に続けて追記
+  if(finalText && !/[。！？!?\n]$/.test(finalText)) finalText+='。';
+  lastFinal=''; interim='';
+  if(!recDate) recDate=new Date();
+  rec=newRec();
+  try{rec.start()}catch(e){}
+  recording=true; startAt=Date.now();
+  tick=setInterval(showTime,500);
+  $('text').readOnly=true;
+  $('dot').classList.add('on'); $('stText').textContent='録音中…';
+  $('btnRec').textContent='Ⅱ 一時停止'; $('btnRec').classList.add('pause');
+  $('btnStop').disabled=false;
+  $('outCard').classList.add('hidden');
+  keepAwake();
+}
+function pause(){
+  if(!recording) return;
+  recording=false;
+  try{rec.stop()}catch(e){}
+  if(interim){addFinal(interim);interim='';render()}
+  elapsed+=Date.now()-startAt; clearInterval(tick); showTime();
+  $('text').readOnly=false;
+  $('dot').classList.remove('on'); $('stText').textContent='一時停止中';
+  $('btnRec').textContent='● 録音再開'; $('btnRec').classList.remove('pause');
+  releaseAwake();
+}
+function finish(){
+  pause();
+  setTimeout(()=>{ // 最後の認識結果を待つ
+    render();
+    $('stText').textContent='終了（文字は手で直せます）';
+    $('btnStop').disabled=true;
+    $('btnRec').textContent='● 録音開始';
+    saveHist();
+    $('outCard').classList.remove('hidden');
+    selectMode(curMode);
+    $('outCard').scrollIntoView({behavior:'smooth'});
+  },600);
+}
+function showTime(){
+  const ms=elapsed+(recording?Date.now()-startAt:0), s=Math.floor(ms/1000);
+  $('timer').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+}
+$('btnRec').onclick=()=>recording?pause():start();
+$('btnStop').onclick=finish;
+$('btnClear').onclick=()=>{
+  if($('text').value && !confirm('テキストを消して新しく録音しますか？')) return;
+  if(recording) pause();
+  finalText='';interim='';elapsed=0;recDate=null;render();showTime();
+  $('stText').textContent='待機中';$('btnStop').disabled=true;$('btnRec').textContent='● 録音開始';
+  $('outCard').classList.add('hidden');
+};
+
+/* ---- 画面を消さない ---- */
+async function keepAwake(){try{if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen')}catch(e){}}
+function releaseAwake(){try{wake&&wake.release();wake=null}catch(e){}}
+
+/* ---- 3種類の出力 ---- */
+let curMode='raw';
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>selectMode(b.dataset.m));
+function selectMode(m){
+  curMode=m;
+  document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('sel',b.dataset.m===m));
+  buildOut();
+}
+function fmtDate(d){d=d||new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
+function buildOut(){
+  const body=$('text').value.trim();
+  let s=body;
+  if(curMode==='fix') s=$('hFix').value.trim()+'\n\n――――――\n'+body;
+  if(curMode==='rep') s=$('hRep').value.trim()+'\n録音日時：'+fmtDate(recDate)+'\n\n――――――\n'+body;
+  if(curMode==='idn') s=$('hIdn').value.trim()+'\n\n――――――\n'+body;
+  $('out').value=s;
+  $('btnCopy').textContent='📋 コピーする';$('btnCopy').classList.remove('done');
+}
+$('text').addEventListener('input',()=>{ if(!$('outCard').classList.contains('hidden')) buildOut() });
+
+/* ---- コピー（iPhone対応） ---- */
+$('btnCopy').onclick=async()=>{
+  const v=$('out').value; let ok=false;
+  try{await navigator.clipboard.writeText(v);ok=true}catch(e){}
+  if(!ok){
+    const t=document.createElement('textarea');t.value=v;t.setAttribute('readonly','');
+    t.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.appendChild(t);
+    const r=document.createRange();r.selectNodeContents(t);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+    t.setSelectionRange(0,v.length);ok=document.execCommand('copy');document.body.removeChild(t);
+  }
+  $('btnCopy').textContent=ok?'✅ コピーしました':'⚠️ 下の欄を長押ししてコピー';
+  $('btnCopy').classList.toggle('done',ok);
+  saveHist();
+};
+
+/* ---- Google翻訳で開く（無料・その場で確認用） ---- */
+$('btnGT').onclick=()=>{
+  const body=$('text').value.trim(); if(!body) return;
+  window.open('https://translate.google.com/?sl=ja&tl=id&op=translate&text='+encodeURIComponent(body.slice(0,4500)),'_blank');
+};
+
+/* ---- 履歴 ---- */
+function getHist(){try{return JSON.parse(localStorage.getItem(LS.hist))||[]}catch(e){return[]}}
+function saveHist(){
+  const body=$('text').value.trim(); if(!body) return;
+  let h=getHist(); const key=recDate?recDate.getTime():Date.now();
+  h=h.filter(x=>x.id!==key); h.unshift({id:key,date:fmtDate(new Date(key)),text:body});
+  localStorage.setItem(LS.hist,JSON.stringify(h.slice(0,20))); drawHist();
+}
+function drawHist(){
+  const h=getHist(); $('hist').innerHTML=h.length?'':'<li class="note">まだありません</li>';
+  h.forEach(x=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<b>${x.date}</b><span></span><button>開く</button><button>✕</button>`;
+    li.querySelector('span').textContent=x.text;
+    const [bOpen,bDel]=li.querySelectorAll('button');
+    bOpen.onclick=()=>{ if(recording) pause(); finalText=x.text; render(); recDate=new Date(x.id); elapsed=0; showTime();
+      $('stText').textContent='履歴から読み込み'; $('outCard').classList.remove('hidden'); selectMode(curMode); window.scrollTo({top:0,behavior:'smooth'}) };
+    bDel.onclick=()=>{ if(!confirm('この履歴を削除しますか？'))return; localStorage.setItem(LS.hist,JSON.stringify(getHist().filter(y=>y.id!==x.id))); drawHist() };
+    $('hist').appendChild(li);
+  });
+}
+drawHist();
+
+function showWarn(h){$('warn').innerHTML=h;$('warn').classList.remove('hidden')}
+
+/* ---- PWA：アイコンとmanifestをその場で作る（1ファイル構成） ---- */
+(function(){
+  const c=document.createElement('canvas');c.width=c.height=180;const g=c.getContext('2d');
+  g.fillStyle='#0f172a';g.fillRect(0,0,180,180);
+  g.fillStyle='#ef4444';g.beginPath();g.arc(90,90,62,0,Math.PI*2);g.fill();
+  g.fillStyle='#fff';g.fillRect(76,48,28,56);g.beginPath();g.arc(90,48,14,0,Math.PI*2);g.arc(90,104,14,0,Math.PI*2);g.fill();
+  g.strokeStyle='#fff';g.lineWidth=7;g.beginPath();g.arc(90,100,28,0,Math.PI);g.stroke();g.fillRect(86,126,8,16);
+  const png=c.toDataURL('image/png');
+  const ai=document.createElement('link');ai.rel='apple-touch-icon';ai.href=png;document.head.appendChild(ai);
+  const m={name:'声メモ 文字起こしレコーダー',short_name:'声メモ',start_url:location.href.split('#')[0],display:'standalone',background_color:'#0f172a',theme_color:'#0f172a',icons:[{src:png,sizes:'180x180',type:'image/png'}]};
+  const ml=document.createElement('link');ml.rel='manifest';ml.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(m));document.head.appendChild(ml);
+})();
+</script>
+</body>
+</html>
